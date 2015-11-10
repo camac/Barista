@@ -1,6 +1,7 @@
 package org.openntf.barista.util;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 import org.apache.commons.digester.Digester;
 import org.eclipse.core.resources.IFile;
@@ -10,12 +11,22 @@ import org.xml.sax.SAXException;
 
 import com.ibm.commons.log.Log;
 import com.ibm.commons.log.LogMgr;
+import com.ibm.commons.util.StringUtil;
+import com.ibm.designer.domino.ide.resources.dbproperties.XSPProperties;
 import com.ibm.designer.domino.ide.resources.extensions.DesignerProject;
+import com.ibm.designer.domino.ide.resources.project.IDominoDesignerProject;
+import com.ibm.xsp.library.LibraryServiceLoader;
+import com.ibm.xsp.library.LibraryWrapper;
 import com.sun.faces.config.beans.FacesConfigBean;
 
 public class BaristaUtil {
 
-	public static LogMgr BARISTA_LOG = Log.load("org.openntf.barista", "Logger used for Barista");
+	public static LogMgr BARISTA_LOG = Log.load("org.openntf.barista",
+			"Logger used for Barista");
+
+	public static boolean scanLibraries() {
+		return true;
+	}
 
 	public static Digester createDigester(boolean validateXml) {
 
@@ -46,8 +57,9 @@ public class BaristaUtil {
 		return digester;
 
 	}
-	
-	public static FacesConfigBean createFacesConfigBean(DesignerProject designerProject) {
+
+	public static FacesConfigBean createFacesConfigBean(
+			DesignerProject designerProject) {
 
 		FacesConfigBean fcb = new FacesConfigBean();
 
@@ -63,6 +75,62 @@ public class BaristaUtil {
 
 			try {
 				digester.parse(config.getContents(false));
+
+				if (scanLibraries()) {
+
+					if (designerProject instanceof IDominoDesignerProject) {
+
+						IDominoDesignerProject ddp = (IDominoDesignerProject) designerProject;
+
+						XSPProperties props = new XSPProperties(ddp);
+						String depends = props.getDependencies();
+
+						if (StringUtil.isNotEmpty(depends)) {
+
+							String[] libs = depends.split(",");
+
+							for (String lib : libs) {
+
+								System.out.println("Let us check out lib "
+										+ lib);
+
+								LibraryWrapper lw = LibraryServiceLoader
+										.getLibrary(lib);
+
+								String[] configs = lw.getFacesConfigFiles();
+
+								for (String facesconfig : configs) {
+
+									System.out.println(facesconfig);
+
+									InputStream is = lw.getClassLoader()
+											.getResourceAsStream(facesconfig);
+
+									digester.push(fcb);
+									digester.parse(is);
+
+									try {
+										is.close();
+									} catch (IOException e) {
+
+									}
+
+									if (BARISTA_LOG.isTraceDebugEnabled()) {
+										BARISTA_LOG.traceDebug(
+												"Loading faces config for {0}",
+												facesconfig);
+
+									}
+
+								}
+
+							}
+						}
+
+					}
+
+				}
+
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -79,5 +147,4 @@ public class BaristaUtil {
 		return fcb;
 
 	}
-	
 }
