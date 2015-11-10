@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+   <extension
+         point="com.ibm.designer.domino.scripting.publishedProvider">
+      <published
+            id="org.openntf.barista.published"
+            provider="org.openntf.barista.published.BaristaPublishedObjectProvider">
+      </published>
+   </extension>
+
+</plugin>
