@@ -272,7 +272,9 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 			FBSType jstype = null;
 
-			System.out.println("Checking Property for " + getName());
+			if (logger.isTraceDebugEnabled()) {
+				logger.traceDebug("Checking jsType for {0}", getName());
+			}
 			
 			if (StringUtil.isNotEmpty(className)) {
 
