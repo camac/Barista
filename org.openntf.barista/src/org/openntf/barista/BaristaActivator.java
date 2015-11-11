@@ -1,8 +1,5 @@
 package org.openntf.barista;
 
-import java.util.logging.Level;
-
-import org.openntf.barista.util.BaristaUtil;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 
@@ -23,7 +20,6 @@ public class BaristaActivator implements BundleActivator {
 	 */
 	public void start(BundleContext bundleContext) throws Exception {
 		BaristaActivator.context = bundleContext;
-		BaristaUtil.BARISTA_LOG.getLogger().setLevel(Level.INFO);
 	}
 
 	/*
