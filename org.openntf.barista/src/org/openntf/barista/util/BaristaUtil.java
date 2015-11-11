@@ -5,7 +5,6 @@ import java.io.InputStream;
 
 import org.apache.commons.digester.Digester;
 import org.eclipse.core.resources.IFile;
-import org.eclipse.core.runtime.CoreException;
 import org.openntf.barista.config.ManagedBeanRuleSet;
 import org.xml.sax.SAXException;
 
@@ -24,6 +23,10 @@ public class BaristaUtil {
 	public static LogMgr BARISTA_LOG = Log.load("org.openntf.barista",
 			"Logger used for Barista");
 
+	private static String FACESCONFIG_PATH = "WebContent/WEB-INF/faces-config.xml";
+
+	private static LogMgr logger = BARISTA_LOG;
+
 	public static boolean scanLibraries() {
 		return true;
 	}
@@ -37,21 +40,11 @@ public class BaristaUtil {
 		digester.setValidating(validateXml);
 
 		try {
-			// digester.addRuleSet(new FacesConfigRuleSet(true, false, false));
 			digester.addRuleSet(new ManagedBeanRuleSet());
 		} catch (IncompatibleClassChangeError e) {
 			e.printStackTrace();
 		}
-		// for (int i = 0; i < DTD_INFO.length; i++) {
-		// URL url = getClass().getResource(DTD_INFO[i][0]);
-		// if (url != null) {
-		// digester.register(DTD_INFO[i][1], url.toString());
-		// } else {
-		// throw new FacesException(Util.getExceptionMessageString(
-		// "com.sun.faces.NO_DTD_FOUND_ERROR", new Object[] {
-		// DTD_INFO[i][1], DTD_INFO[i][0] }));
-		// }
-		// }
+
 		digester.push(new FacesConfigBean());
 
 		return digester;
@@ -65,86 +58,135 @@ public class BaristaUtil {
 
 		Digester digester = createDigester(false);
 
-		IFile config = designerProject.getProject().getFile(
-				"WebContent/WEB-INF/faces-config.xml");
+		processStandardFacesConfig(designerProject, digester, fcb);
 
-		if (config.exists()) {
+		return fcb;
 
-			digester.clear();
-			digester.push(fcb);
+	}
 
-			try {
-				digester.parse(config.getContents(false));
+	public static FacesConfigBean createLibraryFacesConfigBean(
+			DesignerProject designerProject) {
 
-				if (scanLibraries()) {
+		FacesConfigBean fcb = new FacesConfigBean();
 
-					if (designerProject instanceof IDominoDesignerProject) {
+		Digester digester = createDigester(false);
 
-						IDominoDesignerProject ddp = (IDominoDesignerProject) designerProject;
+		processLibraryFacesConfig(designerProject, digester, fcb);
 
-						XSPProperties props = new XSPProperties(ddp);
-						String depends = props.getDependencies();
+		return fcb;
 
-						if (StringUtil.isNotEmpty(depends)) {
+	}
 
-							String[] libs = depends.split(",");
+	private static void processStandardFacesConfig(
+			DesignerProject designerProject, Digester digester,
+			FacesConfigBean fcb) {
 
-							for (String lib : libs) {
+		IFile config = designerProject.getProject().getFile(FACESCONFIG_PATH);
 
-								System.out.println("Let us check out lib "
-										+ lib);
+		if (!config.exists()) {
+			if (logger.isInfoEnabled()) {
+				logger.info("faces-config.xml not found for project {0}",
+						designerProject.getProject().getName());
+			}
+			return;
+		}
 
-								LibraryWrapper lw = LibraryServiceLoader
-										.getLibrary(lib);
+		digester.clear();
+		digester.push(fcb);
 
-								String[] configs = lw.getFacesConfigFiles();
+		try {
 
-								for (String facesconfig : configs) {
+			digester.parse(config.getContents(false));
 
-									System.out.println(facesconfig);
+		} catch (Exception e) {
 
-									InputStream is = lw.getClassLoader()
-											.getResourceAsStream(facesconfig);
-
-									digester.push(fcb);
-									digester.parse(is);
-
-									try {
-										is.close();
-									} catch (IOException e) {
-
-									}
-
-									if (BARISTA_LOG.isTraceDebugEnabled()) {
-										BARISTA_LOG.traceDebug(
-												"Loading faces config for {0}",
-												facesconfig);
-
-									}
-
-								}
-
-							}
-						}
-
-					}
-
-				}
-
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (SAXException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (CoreException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			if (logger.isErrorEnabled()) {
+				logger.error(e,
+						"Error Parsing Standard faces config for project {0}",
+						designerProject.getProject().getName());
 			}
 
 		}
 
-		return fcb;
+	}
+
+	private static void processLibraryFacesConfig(
+			DesignerProject designerProject, Digester digester,
+			FacesConfigBean fcb) {
+
+		if (designerProject instanceof IDominoDesignerProject) {
+
+			IDominoDesignerProject ddp = (IDominoDesignerProject) designerProject;
+
+			XSPProperties props = new XSPProperties(ddp);
+			String depends = props.getDependencies();
+
+			if (StringUtil.isNotEmpty(depends)) {
+
+				String[] libs = depends.split(",");
+
+				for (String libraryId : libs) {
+					processLibrary(digester, fcb, libraryId);
+				}
+			}
+
+		}
+
+	}
+
+	private static void processLibrary(Digester digester, FacesConfigBean fcb,
+			String libraryId) {
+
+		if (logger.isTraceDebugEnabled()) {
+			logger.traceDebug("Checking for FacesConfig Files in Library {0}",
+					libraryId);
+		}
+
+		LibraryWrapper lw = LibraryServiceLoader.getLibrary(libraryId);
+
+		String[] configs = lw.getFacesConfigFiles();
+
+		for (String facesconfig : configs) {
+
+			if (logger.isTraceDebugEnabled()) {
+				logger.traceDebug(
+						"Parsing faces config: '{0}' from library: '{1}'",
+						facesconfig, libraryId);
+			}
+
+			InputStream is = lw.getClassLoader().getResourceAsStream(
+					facesconfig);
+
+			digester.push(fcb);
+
+			try {
+				digester.parse(is);
+			} catch (IOException e1) {
+
+				if (logger.isErrorEnabled()) {
+					logger.error(e1, "Error when parsing {0}", facesconfig);
+				}
+
+			} catch (SAXException e1) {
+
+				if (logger.isErrorEnabled()) {
+					logger.error(e1, "Error when parsing {0}", facesconfig);
+				}
+
+			}
+
+			try {
+				is.close();
+			} catch (IOException e) {
+
+			}
+
+			if (logger.isTraceDebugEnabled()) {
+				logger.traceDebug("Loading faces config for {0}", facesconfig);
+
+			}
+
+		}
 
 	}
 }

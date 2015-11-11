@@ -24,12 +24,10 @@ import com.ibm.commons.xsd.xml.XmlDefinition;
 import com.ibm.commons.xsdutil.xsd.XSDSchemaHelper;
 import com.ibm.commons.xsdutil.xsd.schema.XSDSchemaSet;
 import com.ibm.designer.domino.ide.resources.project.IDominoDesignerProject;
-import com.ibm.designer.domino.ui.commons.DesignerUIResource;
 import com.ibm.designer.domino.xsp.api.published.XmlPublishedObject;
 import com.ibm.designer.domino.xsp.data.XSPDataUtil;
 import com.ibm.designer.runtime.DesignerRuntime;
 import com.ibm.jscript.types.FBSType;
-import com.ibm.jscript.types.FBSType.DesignTimeClassLoader;
 import com.sun.faces.config.beans.ManagedBeanBean;
 
 public class BaristaPublishedObject extends XmlPublishedObject {
@@ -37,9 +35,9 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 	XmlDefinition _xmlDef;
 
 	private static LogMgr logger = BaristaUtil.BARISTA_LOG;
-	
+
 	private static FBSType.DesignTimeClassLoader registeredDesignTimeClassLoader = null;
-	
+
 	private String className = null;
 
 	public BaristaPublishedObject(ManagedBeanBean bean) {
@@ -49,13 +47,10 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 		this.className = bean.getManagedBeanClass();
 
 		if (logger.isInfoEnabled()) {
-			logger.info("Created Barista Published Object Name: {0}, Class: {1}", getName(), className);
+			logger.info(
+					"Created Barista Published Object Name: {0}, Class: {1}",
+					getName(), className);
 		}
-		
-		// Should determine if from
-		// Library
-		// NSF
-		// Somewhere else e.g. standard libraries
 
 	}
 
@@ -78,7 +73,6 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 				XSDSchemaSet ss = new XSDSchemaSet();
 
-				// gotta do somethin here
 				ss.addRootSchema(createSchema(getNode()));
 
 				NamespaceContext nc = XSPDataUtil.getNamespaceContext(element);
@@ -95,10 +89,7 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 	private XSDSchema createSchema(Node node) {
 
-		// Copying from SchemaGeneratorHelper.generateSchema
-
 		// Here you might get an attribute which says what type
-
 		XSDSchema schema = XSDFactory.eINSTANCE.createXSDSchema();
 		schema.setSchemaForSchemaQNamePrefix("xsd");
 
@@ -137,50 +128,46 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 	}
 
-	private Class<?> loadMyClass(String className) {
+	private Class<?> loadClassViaRuntimeApplication(String className) {
 
 		Class<?> c = null;
 
-		try {
-			c = getClass().getClassLoader().loadClass(className);
-
-			if (c != null)
-				return c;
-
-		} catch (ClassNotFoundException e) {
-
+		if (logger.isTraceDebugEnabled()) {
+			logger.traceDebug(
+					"Attempt to load class {0} via RuntimeApplication",
+					className);
 		}
 
 		try {
+
 			IDominoDesignerProject dp = (IDominoDesignerProject) getProperty(PROPERTY_PROJECT);
-			// IDominoDesignerProject dp = //
 			// DesignerUIResource.getLastSelection().getProject();
 
 			c = dp.getRuntimeApplication().loadClass(className);
 
-			dp.getRuntimeApplication().getClassLoader();
+			if (c != null) {
 
-			if (c != null)
+				if (logger.isTraceDebugEnabled()) {
+					logger.traceDebug(
+							"Loaded class {0} via RuntimeApplication",
+							className);
+				}
+
 				return c;
+			}
 
 		} catch (ClassNotFoundException e) {
 
 		}
 
-		Iterator<DesignTimeClassLoader> it = DesignerRuntime.getJSContext()
-				.getDesignTimeClassLoaders();
+		return c;
 
-		while (it.hasNext()) {
+	}
 
-			DesignTimeClassLoader cl = it.next();
+	
+	private Class<?> loadClass(String className) {
 
-			c = cl.loadClass(className);
-
-			if (c != null) {
-				return c;
-			}
-
-		}
+		Class<?> c = loadClassViaRuntimeApplication(className);
 
 		return c;
 
@@ -192,7 +179,7 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 			String className = this.className;
 
-			Class<?> c = loadMyClass(className);
+			Class<?> c = loadClass(className);
 
 			BeanInfo info = Introspector.getBeanInfo(c, Object.class);
 
@@ -219,7 +206,10 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 			}
 
 		} catch (Exception e) {
-			e.printStackTrace();
+
+			if (logger.isErrorEnabled()) {
+				logger.error(e, "Error Generating Bean Schema");
+			}
 		}
 
 	}
@@ -227,14 +217,17 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 	private void registerDynamicClassLoader() {
 
 		IDominoDesignerProject dp = (IDominoDesignerProject) getProperty(PROPERTY_PROJECT);
-		DesignerUIResource.getLastSelection().getProject();
+		// TODO do I need this?
+		// DesignerUIResource.getLastSelection().getProject();
 
 		ClassLoader newLoader = dp.getRuntimeApplication().getClassLoader();
 
-		registeredDesignTimeClassLoader = new FBSType.SimpleDesignTimeClassLoader(newLoader);
+		registeredDesignTimeClassLoader = new FBSType.SimpleDesignTimeClassLoader(
+				newLoader);
 
-		DesignerRuntime.getJSContext().addDesignTimeClassLoader(registeredDesignTimeClassLoader);
-		
+		DesignerRuntime.getJSContext().addDesignTimeClassLoader(
+				registeredDesignTimeClassLoader);
+
 	}
 
 	private void removeDynamicClassLoader() {
@@ -256,13 +249,15 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 			}
 
 		}
-		
+
 	}
 
 	@Override
 	public Object getProperty(String name) {
 
-		BaristaUtil.BARISTA_LOG.traceDebug("Asking for " + name);
+		if (logger.isTraceDebugEnabled()) {
+			logger.traceDebug("Asking {0} for property {1} ", getName(), name);
+		}
 
 		if ("binding".equals(name)) {
 			return "com.ibm.designer.domino.scripting.el";
@@ -272,25 +267,22 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 
 			FBSType jstype = null;
 
-			if (logger.isTraceDebugEnabled()) {
-				logger.traceDebug("Checking jsType for {0}", getName());
-			}
-			
 			if (StringUtil.isNotEmpty(className)) {
 
 				registerDynamicClassLoader();
 
 				jstype = FBSType.getType(DesignerRuntime.getJSContext(),
 						className);
-				
+
 				removeDynamicClassLoader();
-				
+
 			} else {
 				jstype = FBSType.undefinedType;
 			}
-			
+
 			if (logger.isTraceDebugEnabled()) {
-				logger.traceDebug("jsType for '{0}' is '{1}'", jstype.getDescString());
+				logger.traceDebug("jsType for '{0}' is '{1}'",
+						jstype.getDescString());
 			}
 
 			return jstype;
@@ -298,11 +290,6 @@ public class BaristaPublishedObject extends XmlPublishedObject {
 		}
 
 		if ("methods".equals(name)) {
-
-			if (logger.isTraceDebugEnabled()) {
-				logger.traceDebug("Asking for 'methods' of {0}", getName());
-			}
-			
 
 			@SuppressWarnings("rawtypes")
 			HashMap map = new HashMap();

@@ -5,6 +5,7 @@ import java.util.Map;
 import org.openntf.barista.util.BaristaUtil;
 import org.w3c.dom.Node;
 
+import com.ibm.commons.log.LogMgr;
 import com.ibm.designer.domino.ide.resources.extensions.DesignerProject;
 import com.ibm.designer.domino.ide.resources.project.DominoDesignerProject;
 import com.ibm.designer.domino.scripting.api.IScriptData.PublishedObject;
@@ -15,10 +16,15 @@ import com.sun.faces.config.beans.ManagedBeanBean;
 
 public class BaristaPublishedObjectProvider implements PublishedObjectProvider {
 
+	private static LogMgr logger = BaristaUtil.BARISTA_LOG;
+
+	private static String VIEW_NODE = "xp:view";
+
 	public BaristaPublishedObjectProvider() {
 
-		BaristaUtil.BARISTA_LOG
-				.info("Created the BaristaPublishedObjectProvider");
+		if (logger.isInfoEnabled()) {
+			logger.info("Created the BaristaPublishedObjectProvider");
+		}
 
 	}
 
@@ -30,7 +36,7 @@ public class BaristaPublishedObjectProvider implements PublishedObjectProvider {
 
 		if (designerProject instanceof DominoDesignerProject) {
 
-			if (node.getNodeName().equals("xp:view")) {
+			if (node.getNodeName().equals(VIEW_NODE)) {
 
 				FacesConfigBean fcb = BaristaUtil
 						.createFacesConfigBean(designerProject);
@@ -39,12 +45,32 @@ public class BaristaPublishedObjectProvider implements PublishedObjectProvider {
 
 					BaristaPublishedObject o = new BaristaPublishedObject(mbb);
 					o.setNode(node);
-					
+
 					publishedObjects.put(mbb.getManagedBeanName(), o);
 
 					o.setProject(designerProject);
 
 				}
+
+				if (BaristaUtil.scanLibraries()) {
+
+					FacesConfigBean libfcb = BaristaUtil
+							.createLibraryFacesConfigBean(designerProject);
+
+					for (ManagedBeanBean mbb : libfcb.getManagedBeans()) {
+
+						BaristaPublishedObject o = new BaristaPublishedObject(
+								mbb);
+						o.setNode(node);
+
+						publishedObjects.put(mbb.getManagedBeanName(), o);
+
+						o.setProject(designerProject);
+
+					}
+					
+				}
+
 			}
 
 		}
